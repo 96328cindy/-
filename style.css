@@ -1,0 +1,346 @@
+// --- Data Initialization ---
+let notes = [];
+try {
+    notes = JSON.parse(localStorage.getItem('ai_notes'));
+    if (!Array.isArray(notes)) notes = []; // handle old string data gracefully
+} catch(e) {
+    notes = []; // if couldn't parse array, handle old string data transition
+}
+
+let todos = JSON.parse(localStorage.getItem('ai_todos')) || [
+    { text: "體驗全新的 AI 管家介面", done: false },
+    { text: "規劃下一次的旅行", done: false }
+];
+let accounts = JSON.parse(localStorage.getItem('ai_accounts')) || [];
+
+// --- Lifecycle & DOM Elements ---
+document.addEventListener('DOMContentLoaded', () => {
+    // Initialize date input to today
+    const dateInput = document.getElementById('acc-date');
+    if (dateInput) {
+        dateInput.value = new Date().toISOString().split('T')[0];
+    }
+    
+    // Load components
+    loadNotes();
+    renderTodos();
+    renderAccountRecords();
+    
+    // Update Greeting time
+    updateGreeting();
+});
+
+// Update the greeting message based on time
+function updateGreeting() {
+    const hour = new Date().getHours();
+    const greetingEl = document.getElementById('greeting-text');
+    if (!greetingEl) return;
+    
+    if (hour < 5) greetingEl.innerHTML = "夜深了，<br>請注意休息";
+    else if (hour < 12) greetingEl.innerHTML = "早安，<br>美好的一天開始了";
+    else if (hour < 18) greetingEl.innerHTML = "午安，<br>繼續保持活力";
+    else greetingEl.innerHTML = "晚安，<br>今天辛苦了";
+}
+
+// --- Navigation & Section Toggle ---
+function showSection(sectionId, element = null) {
+    // Hide all sections
+    document.querySelectorAll('.section-container').forEach(sec => sec.classList.remove('active'));
+    // Show target section
+    const target = document.getElementById(sectionId);
+    if(target) target.classList.add('active');
+    
+    // Update Nav items
+    document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
+    
+    if (element) {
+        element.classList.add('active');
+    } else {
+        // Fallback if accessed programmatically
+        document.querySelectorAll('.nav-item').forEach(item => {
+            if (item.getAttribute('onclick')?.includes(sectionId)) {
+                item.classList.add('active');
+            }
+        });
+    }
+    
+    // Close mobile menu if open
+    closeMobileMenu();
+}
+
+function toggleMobileMenu() {
+    document.getElementById('sidebar').classList.toggle('open');
+}
+
+function closeMobileMenu() {
+    if (window.innerWidth <= 768) {
+        document.getElementById('sidebar').classList.remove('open');
+    }
+}
+
+// Sub-tabs for Planner
+function showTab(tabId, element) {
+    document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+    
+    document.getElementById(tabId).classList.add('active');
+    element.classList.add('active');
+}
+
+// --- 1. Notepad ---
+function renderNotes() {
+    const list = document.getElementById('note-list');
+    if(!list) return;
+    
+    if (notes.length === 0) {
+        list.style.display = 'none';
+        return;
+    }
+    
+    list.style.display = 'flex';
+    list.innerHTML = '';
+    
+    notes.forEach((note, index) => {
+        const div = document.createElement('div');
+        div.className = 'note-item';
+        // Basic escaping to prevent HTML injection but allow line breaks
+        const safeText = note.text.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        div.innerHTML = `
+            <div class="note-content">${safeText}</div>
+            <div class="note-footer">
+                <span>${note.date}</span>
+                <button class="note-delete-btn" onclick="deleteNote(${index})" title="刪除">
+                    <span class="material-symbols-rounded" style="font-size: 18px;">delete</span>
+                </button>
+            </div>
+        `;
+        list.appendChild(div);
+    });
+    localStorage.setItem('ai_notes', JSON.stringify(notes));
+}
+
+function loadNotes() {
+    renderNotes();
+}
+
+function saveNote() {
+    const input = document.getElementById('note-input');
+    const text = input.value.trim();
+    if (!text) {
+        alert("請輸入內容喔！");
+        return;
+    }
+    
+    const d = new Date();
+    const dateStr = d.getFullYear() + '/' + (d.getMonth()+1).toString().padStart(2, '0') + '/' + 
+                    d.getDate().toString().padStart(2, '0') + ' ' + 
+                    d.getHours().toString().padStart(2, '0') + ':' + 
+                    d.getMinutes().toString().padStart(2, '0');
+    
+    notes.unshift({ text: text, date: dateStr });
+    input.value = '';
+    renderNotes();
+}
+
+function deleteNote(index) {
+    if(confirm('確定要刪除這筆紀錄嗎？')) {
+        notes.splice(index, 1);
+        renderNotes();
+    }
+}
+
+// --- 2. To-do List ---
+function renderTodos() {
+    const list = document.getElementById('todo-list');
+    if(!list) return;
+    
+    list.innerHTML = '';
+    
+    if (todos.length === 0) {
+        list.innerHTML = '<p style="color: var(--text-muted); text-align: center; padding: 2rem;">目前沒有待辦事項，太棒了！ 🎉</p>';
+        return;
+    }
+    
+    todos.forEach((item, index) => {
+        const div = document.createElement('div');
+        div.className = `todo-item ${item.done ? 'completed' : ''}`;
+        div.innerHTML = `
+            <input type="checkbox" class="checkbox-custom" ${item.done ? 'checked' : ''} onclick="toggleTodo(${index})">
+            <span class="todo-text">${item.text}</span>
+            <button class="delete-btn" onclick="deleteTodo(${index})">
+                <span class="material-symbols-rounded">delete</span>
+            </button>
+        `;
+        list.appendChild(div);
+    });
+    localStorage.setItem('ai_todos', JSON.stringify(todos));
+}
+
+function addTodo() {
+    const input = document.getElementById('todo-input');
+    const text = input.value.trim();
+    if (text === '') return;
+    
+    todos.unshift({ text: text, done: false }); // Add to top
+    input.value = '';
+    renderTodos();
+}
+
+function handleTodoKeyPress(e) {
+    if (e.key === 'Enter') {
+        addTodo();
+    }
+}
+
+function toggleTodo(index) {
+    todos[index].done = !todos[index].done;
+    
+    // Sort: uncompleted first
+    const uncompleted = todos.filter(t => !t.done);
+    const completed = todos.filter(t => t.done);
+    todos = [...uncompleted, ...completed];
+    
+    renderTodos();
+}
+
+function deleteTodo(index) {
+    todos.splice(index, 1);
+    renderTodos();
+}
+
+// --- 3. Planner (Itinerary) ---
+function generateItinerary() {
+    const dest = document.getElementById('plan-destination').value || '未知地點';
+    const country = document.getElementById('plan-country').value || '未知國家';
+    const days = parseInt(document.getElementById('plan-days').value) || 3;
+    const people = document.getElementById('plan-people').value || 1;
+    const budget = document.getElementById('plan-budget').value || '彈性';
+    const transport = document.getElementById('plan-transport').value;
+    
+    const resultDiv = document.getElementById('itinerary-result');
+    const contentDiv = document.getElementById('itinerary-content');
+    
+    resultDiv.style.display = 'block';
+    
+    // Smooth scroll to result
+    setTimeout(() => {
+        resultDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }, 100);
+
+    let html = `
+        <div style="margin-bottom: 2rem; padding-bottom: 1rem; border-bottom: 1px solid var(--glass-border);">
+            <h3 style="color: var(--primary); font-size: 1.5rem; margin-bottom: 0.5rem;">🌟 ${country} ${dest} ${days}天旅行規劃</h3>
+            <div style="display: flex; gap: 1rem; flex-wrap: wrap; color: var(--text-muted); font-size: 0.95rem;">
+                <span><span class="material-symbols-rounded" style="font-size: 18px; vertical-align: middle;">group</span> ${people} 人同行</span>
+                <span><span class="material-symbols-rounded" style="font-size: 18px; vertical-align: middle;">account_balance_wallet</span> 預算 NT$ ${budget}</span>
+                <span><span class="material-symbols-rounded" style="font-size: 18px; vertical-align: middle;">directions_car</span> 主要交通：${transport}</span>
+            </div>
+        </div>
+    `;
+
+    for (let i = 1; i <= days; i++) {
+        html += `
+            <div class="day-plan">
+                <h4>第 ${i} 天：探索與體驗</h4>
+                <ul>
+                    <li>上午：在地知名景點文化巡禮 (搭乘${transport})</li>
+                    <li>中午：品嚐${dest}在地特色美食</li>
+                    <li>下午：深入當地生活圈或購物行程</li>
+                    <li>晚上：精緻晚餐與放鬆活動，隨後返回飯店休息</li>
+                </ul>
+            </div>
+        `;
+    }
+    html += `<p style="font-size: 0.9rem; color: var(--text-muted); margin-top: 2rem; text-align: center;">💡 上述為 AI 初步規劃框架，建議出發前深入確認各景點營業時間與交通班次喔！</p>`;
+    
+    contentDiv.innerHTML = html;
+}
+
+// --- 4. Route Planning (Map) ---
+function openGoogleMaps() {
+    const from = encodeURIComponent(document.getElementById('route-from').value);
+    const to = encodeURIComponent(document.getElementById('route-to').value);
+    const mode = document.getElementById('route-mode').value;
+
+    if (!to) {
+        alert('請至少輸入目的地地址！');
+        document.getElementById('route-to').focus();
+        return;
+    }
+    
+    // Construct Google Maps URL (origin is optional to allow current location routing if empty)
+    let url = `https://www.google.com/maps/dir/?api=1&destination=${to}&travelmode=${mode}`;
+    if(from) {
+        url += `&origin=${from}`;
+    }
+    
+    window.open(url, '_blank');
+}
+
+// --- 5. Accounting ---
+function renderAccountRecords() {
+    const tbody = document.getElementById('account-list');
+    if(!tbody) return;
+    
+    tbody.innerHTML = '';
+    
+    if(accounts.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--text-muted);">目前沒有記帳紀錄</td></tr>';
+        return;
+    }
+    
+    // Sort by date (newest first)
+    accounts.sort((a, b) => new Date(b.date) - new Date(a.date));
+    
+    accounts.forEach((record, index) => {
+        const tr = document.createElement('tr');
+        const isExpense = record.type === 'expense';
+        const typeBadge = isExpense ? '<span class="badge expense">支出</span>' : '<span class="badge income">收入</span>';
+        const amountClass = isExpense ? 'amount expense' : 'amount income';
+        const sign = isExpense ? '-$' : '+$';
+        
+        tr.innerHTML = `
+            <td>${record.date}</td>
+            <td>${typeBadge}</td>
+            <td>${record.category}</td>
+            <td style="color: var(--text-muted); font-size: 0.9rem;">${record.note || '-'}</td>
+            <td class="${amountClass}">${sign}${parseFloat(record.amount).toLocaleString()}</td>
+            <td>
+                <button class="delete-btn" onclick="deleteRecord(${index})" title="刪除">
+                    <span class="material-symbols-rounded" style="font-size: 20px;">delete</span>
+                </button>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+    
+    localStorage.setItem('ai_accounts', JSON.stringify(accounts));
+}
+
+function addAccountRecord() {
+    const date = document.getElementById('acc-date').value;
+    const type = document.getElementById('acc-type').value;
+    const cat = document.getElementById('acc-category').value;
+    const amount = document.getElementById('acc-amount').value;
+    const note = document.getElementById('acc-note').value;
+
+    if (!date || !amount || amount <= 0) {
+        alert('請完整填寫日期與大於0的金額！');
+        return;
+    }
+
+    accounts.push({ date, type, category: cat, amount, note });
+    renderAccountRecords();
+    
+    // Reset form inputs except date
+    document.getElementById('acc-amount').value = '';
+    document.getElementById('acc-note').value = '';
+    document.getElementById('acc-amount').focus();
+}
+
+function deleteRecord(index) {
+    if(confirm('確定要刪除這筆紀錄嗎？')) {
+        accounts.splice(index, 1);
+        renderAccountRecords();
+    }
+}
